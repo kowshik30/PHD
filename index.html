@@ -1,27 +1,81 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8"/>
-  <title>Sensor Dashboard — RealtimeDB</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8" />
+  <title>Raspberry Pi Sensor Readings</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body{font-family:system-ui,Segoe UI,Roboto,Arial;padding:18px}
-    table{border-collapse:collapse;width:100%;max-width:1100px}
-    th,td{border:1px solid #ddd;padding:8px;text-align:left}
-    th{background:#f4f4f4}
-    img.thumb{max-width:160px;max-height:120px;object-fit:cover}
-    .muted{color:#666;font-size:0.9rem}
+    body { font-family: Arial; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; max-width: 900px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    th { background: #eee; }
   </style>
-  <script type="module" crossorigin src="/PHD/assets/index-BMJn6GfF.js"></script>
 </head>
 <body>
-  <h1>Raspberry Pi Sensor Readings</h1>
-  <p class="muted">Realtime Database viewer — updates automatically.</p>
 
-  <table id="tbl" aria-live="polite">
-    <thead><tr><th>Document ID</th><th>Humidity</th><th>Image</th><th>Light</th><th>Temperature</th></tr></thead>
+  <h1>Raspberry Pi Sensor Readings</h1>
+
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th>Device ID</th>
+        <th>Humidity</th>
+        <th>Image</th>
+        <th>Light</th>
+        <th>Temperature</th>
+      </tr>
+    </thead>
     <tbody></tbody>
   </table>
+
+  <!-- WORKING Firebase CDN version -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+  <script>
+    console.log("Firebase loaded:", typeof firebase);
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA6sbgEfeTBvT_zQbdJtErAzK_8s7rcO",
+      authDomain: "myproject-d8e61.firebaseapp.com",
+      databaseURL: "https://myproject-d8e61-default-rtdb.firebaseio.com/",
+      projectId: "myproject-d8e61",
+      storageBucket: "myproject-d8e61.firebasestorage.app",
+      messagingSenderId: "270167245798",
+      appId: "1:270167245798:web:b38511a3b10deaf5d9cc27"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const ROOT_PATH = "sensors";
+    const tbody = document.querySelector("#tbl tbody");
+
+    function render(data) {
+      tbody.innerHTML = "";
+
+      if (!data) {
+        tbody.innerHTML = "<tr><td colspan='5'>No data found</td></tr>";
+        return;
+      }
+
+      Object.entries(data).forEach(([id, row]) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${id}</td>
+          <td>${row.Humidity ?? ""}</td>
+          <td></td>
+          <td>${row.Light ?? ""}</td>
+          <td>${row.Temperature ?? ""}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    db.ref(ROOT_PATH).on("value", snap => {
+      render(snap.val());
+    });
+  </script>
 
 </body>
 </html>
