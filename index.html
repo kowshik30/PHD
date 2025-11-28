@@ -18,12 +18,13 @@
   <p class="muted">Realtime Database viewer — updates automatically.</p>
 
   <table id="tbl" aria-live="polite">
-    <thead><tr><th>Document ID</th><th>Humidity</th><th>Image</th><th>Light</th><th>Temperature</th></tr></thead>
+    <thead><tr><th>Device ID</th><th>Humidity</th><th>Image</th><th>Light</th><th>Temperature</th></tr></thead>
     <tbody></tbody>
   </table>
 
   <script type="module">
-    // ====== REPLACE THIS firebaseConfig WITH YOUR WEB APP CONFIG ======
+
+    // ======== Firebase Config (IMPORTANT: corrected databaseURL) ========
     const firebaseConfig = {
       apiKey: "AIzaSyA6sbgEfeTBvT_zQbdJtErAzK_8s7rcUoU",
       authDomain: "myproject-d8e61.firebaseapp.com",
@@ -32,9 +33,9 @@
       messagingSenderId: "270167245798",
       appId: "1:270167245798:web:b38511a3b10deaf5d9cc27",
       measurementId: "G-LJ40CBFL0Q",
-      databaseURL: "https://myproject-d8e61-default-rtdb.firebaseio.com/sensors.json"
+      databaseURL: "https://myproject-d8e61-default-rtdb.firebaseio.com/"
     };
-    // ================================================================
+    // ====================================================================
 
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.30.0/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.30.0/firebase-database.js";
@@ -42,42 +43,50 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // CHANGE this path to wherever you store readings, e.g. 'sensors' or '/'
-    const ROOT_PATH = 'sensors';
+    // Your JSON path:  https://myproject.../sensors.json
+    const ROOT_PATH = "sensors";
 
-    const tbody = document.querySelector('#tbl tbody');
+    const tbody = document.querySelector("#tbl tbody");
 
-    function render(dataObj){
-      tbody.innerHTML = '';
-      if(!dataObj){
-        tbody.innerHTML = '<tr><td colspan="5">No data found.</td></tr>';
+    function render(dataObj) {
+      tbody.innerHTML = "";
+      if (!dataObj) {
+        tbody.innerHTML = "<tr><td colspan='5'>No data found.</td></tr>";
         return;
       }
-      Object.entries(dataObj).forEach(([id, row])=>{
-        const imgHtml = row.ImageURL ? `<img class="thumb" src="${row.ImageURL}" alt="${id}">` : '';
-        const tr = document.createElement('tr');
+
+      Object.entries(dataObj).forEach(([id, row]) => {
+        const imgHtml = row.ImageURL ? `<img class="thumb" src="${row.ImageURL}" alt="${id}">` : "";
+
+        const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${escapeHtml(id)}</td>
-          <td>${escapeHtml(row.Humidity ?? '')}</td>
+          <td>${escapeHtml(row.Humidity ?? "")}</td>
           <td>${imgHtml}</td>
-          <td>${escapeHtml(row.Light_Intensity ?? row.Light ?? '')}</td>
-          <td>${escapeHtml(row.temperature ?? row.Temperature ?? '')}</td>
+          <td>${escapeHtml(row.Light_Intensity ?? row.Light ?? "")}</td>
+          <td>${escapeHtml(row.temperature ?? row.Temperature ?? "")}</td>
         `;
         tbody.appendChild(tr);
       });
     }
 
-    // realtime listener
+    // Realtime listener
     const rootRef = ref(db, ROOT_PATH);
-    onValue(rootRef, snap => {
-      render(snap.val());
-    }, err => {
-      tbody.innerHTML = `<tr><td colspan="5">Error reading DB: ${escapeHtml(err.message || err)}</td></tr>`;
-      console.error(err);
-    });
+    onValue(
+      rootRef,
+      snap => render(snap.val()),
+      err => {
+        tbody.innerHTML = `<tr><td colspan="5">Error: ${escapeHtml(err.message)}</td></tr>`;
+        console.error(err);
+      }
+    );
 
-    // small helper to avoid simple XSS if any values contain HTML
-    function escapeHtml(s){ return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
   </script>
 </body>
 </html>
