@@ -2,28 +2,17 @@
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Sensor Dashboard — RealtimeDB</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <style>
-    body{font-family:system-ui,Segoe UI,Roboto,Arial;padding:18px}
-    table{border-collapse:collapse;width:100%;max-width:1100px}
-    th,td{border:1px solid #ddd;padding:8px;text-align:left}
-    th{background:#f4f4f4}
-    img.thumb{max-width:160px;max-height:120px;object-fit:cover}
-    .muted{color:#666;font-size:0.9rem}
-  </style>
+  <title>Debug Sensor Dashboard</title>
 </head>
 <body>
-  <h1>Raspberry Pi Sensor Readings</h1>
-  <p class="muted">Realtime Database viewer — updates automatically.</p>
-
-  <table id="tbl" aria-live="polite">
-    <thead><tr><th>Document ID</th><th>Humidity</th><th>Image</th><th>Light</th><th>Temperature</th></tr></thead>
-    <tbody></tbody>
-  </table>
+  <h1>Debug Sensor Dashboard</h1>
+  <pre id="log"></pre>
+  <table id="tbl"><thead><tr><th>Device</th><th>Humidity</th><th>Temp</th></tr></thead><tbody></tbody></table>
 
   <script type="module">
-    // ====== REPLACE THIS firebaseConfig WITH YOUR WEB APP CONFIG ======
+    const logEl = document.getElementById('log');
+    function log(...args){ console.log(...args); logEl.textContent += args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ') + '\\n'; }
+
     const firebaseConfig = {
       apiKey: "AIzaSyA6sbgEfeTBvT_zQbdJtErAzK_8s7rcUoU",
       authDomain: "myproject-d8e61.firebaseapp.com",
@@ -34,50 +23,52 @@
       measurementId: "G-LJ40CBFL0Q",
       databaseURL: "https://myproject-d8e61-default-rtdb.firebaseio.com"
     };
-    // ================================================================
 
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.30.0/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.30.0/firebase-database.js";
 
+    log('Initializing Firebase app...');
     const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+    log('App initialized:', app ? true : false);
 
-    // CHANGE this path to wherever you store readings, e.g. 'sensors' or '/'
-    const ROOT_PATH = 'sensors';
+    try {
+      const db = getDatabase(app);
+      log('getDatabase ok');
+      const ROOT_PATH = 'sensors';
+      log('ROOT_PATH =', ROOT_PATH);
 
-    const tbody = document.querySelector('#tbl tbody');
+      log('Testing raw fetch to /sensors.json ...');
+      fetch(firebaseConfig.databaseURL + '/sensors.json')
+        .then(r => r.text().then(t => { log('REST status', r.status); log('REST body', t); }))
+        .catch(e => log('REST fetch error:', e));
 
-    function render(dataObj){
+      log('Attaching onValue listener...');
+      const rootRef = ref(db, ROOT_PATH);
+      onValue(rootRef,
+        (snap) => {
+          log('onValue fired. exists:', snap.exists());
+          log('snap.val():', snap.val());
+          render(snap.val());
+        },
+        (err) => {
+          log('onValue error:', err);
+          document.querySelector('#tbl tbody').innerHTML = '<tr><td colspan=3>Error: '+(err.message||err)+'</td></tr>';
+        }
+      );
+    } catch (e) {
+      log('Exception while setting up DB:', e);
+    }
+
+    function render(data){
+      const tbody = document.querySelector('#tbl tbody');
       tbody.innerHTML = '';
-      if(!dataObj){
-        tbody.innerHTML = '<tr><td colspan="5">No data found.</td></tr>';
-        return;
-      }
-      Object.entries(dataObj).forEach(([id, row])=>{
-        const imgHtml = row.ImageURL ? `<img class="thumb" src="${row.ImageURL}" alt="${id}">` : '';
+      if (!data) { tbody.innerHTML = '<tr><td colspan=3>No data</td></tr>'; return; }
+      Object.entries(data).forEach(([id,row])=>{
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${escapeHtml(id)}</td>
-          <td>${escapeHtml(row.Humidity ?? '')}</td>
-          <td>${imgHtml}</td>
-          <td>${escapeHtml(row.Light_Intensity ?? row.Light ?? '')}</td>
-          <td>${escapeHtml(row.temperature ?? row.Temperature ?? '')}</td>
-        `;
+        tr.innerHTML = `<td>${id}</td><td>${row.Humidity ?? ''}</td><td>${row.temperature ?? row.Temperature ?? ''}</td>`;
         tbody.appendChild(tr);
       });
     }
-
-    // realtime listener
-    const rootRef = ref(db, ROOT_PATH);
-    onValue(rootRef, snap => {
-      render(snap.val());
-    }, err => {
-      tbody.innerHTML = `<tr><td colspan="5">Error reading DB: ${escapeHtml(err.message || err)}</td></tr>`;
-      console.error(err);
-    });
-
-    // small helper to avoid simple XSS if any values contain HTML
-    function escapeHtml(s){ return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
   </script>
 </body>
 </html>
