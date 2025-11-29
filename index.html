@@ -5,75 +5,136 @@
   <title>Raspberry Pi Sensor Readings</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: Arial; padding: 20px; }
-    table { border-collapse: collapse; width: 100%; max-width: 900px; }
-    th, td { border: 1px solid #ccc; padding: 8px; }
-    th { background: #eee; }
+    body { font-family: Arial, system-ui, -apple-system; padding: 20px; background:#fff; color:#111; }
+    h1 { margin-top: 0; }
+    table { border-collapse: collapse; width: 100%; max-width: 1000px; margin-top:12px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: middle; }
+    th { background: #f5f5f5; font-weight: 600; }
+    img.thumb { max-width:140px; max-height:90px; object-fit:cover; border-radius:6px; }
+    .muted { color: #666; font-size: 0.95rem; }
+    .center { text-align:center; }
+    .loading { color:#666; padding:12px; }
+    .error { color:#b00020; padding:12px; }
+    @media (max-width:700px){
+      td, th { font-size: 14px; }
+      img.thumb { max-width:100px; max-height:70px; }
+    }
   </style>
 </head>
 <body>
 
   <h1>Raspberry Pi Sensor Readings</h1>
+  <div class="muted">Live data (reads /sensors/*) — temperature, humidity, light, pH, timestamp</div>
 
-  <table id="tbl">
+  <table id="tbl" aria-live="polite">
     <thead>
       <tr>
         <th>Device ID</th>
-        <th>Humidity</th>
+        <th>Temperature (°C)</th>
+        <th>Humidity (%)</th>
+        <th>Light (lux)</th>
+        <th>pH</th>
+        <th>Updated</th>
         <th>Image</th>
-        <th>Light</th>
-        <th>Temperature</th>
       </tr>
     </thead>
     <tbody></tbody>
   </table>
 
-  <!-- WORKING Firebase CDN version -->
+  <!-- Firebase compat SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 
   <script>
-    console.log("Firebase loaded:", typeof firebase);
-
+    // ---------- CONFIG ----------
     const firebaseConfig = {
       apiKey: "AIzaSyA6sbgEfeTBvT_zQbdJtErAzK_8s7rcO",
       authDomain: "myproject-d8e61.firebaseapp.com",
-      databaseURL: "https://myproject-d8e61-default-rtdb.firebaseio.com/",
+      // IMPORTANT: no trailing slash here
+      databaseURL: "https://myproject-d8e61-default-rtdb.firebaseio.com",
       projectId: "myproject-d8e61",
       storageBucket: "myproject-d8e61.firebasestorage.app",
       messagingSenderId: "270167245798",
       appId: "1:270167245798:web:b38511a3b10deaf5d9cc27"
     };
+    // ----------------------------
 
+    // initialize
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-
     const ROOT_PATH = "sensors";
     const tbody = document.querySelector("#tbl tbody");
 
-    function render(data) {
-      tbody.innerHTML = "";
+    // small helpers
+    function esc(s){ return String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+    function fmtNum(v, decimals=1){
+      if (v === undefined || v === null || v === '') return '—';
+      const n = Number(v);
+      if (isNaN(n)) return esc(v);
+      return Math.round((n + Number.EPSILON) * Math.pow(10,decimals)) / Math.pow(10,decimals);
+    }
+    function fmtTime(ms){
+      if (!ms) return '—';
+      try {
+        const d = new Date(Number(ms));
+        if (isNaN(d)) return '—';
+        return d.toLocaleString();
+      } catch(e){ return '—'; }
+    }
 
-      if (!data) {
-        tbody.innerHTML = "<tr><td colspan='5'>No data found</td></tr>";
+    // render function adapted to your Pi keys
+    function render(data) {
+      tbody.innerHTML = '';
+
+      // loading state or no data
+      if (data === null || data === undefined) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">No data found (empty /sensors). Make sure your Pi is writing to /sensors/rpi-01</td></tr>';
         return;
       }
 
-      Object.entries(data).forEach(([id, row]) => {
-        const tr = document.createElement("tr");
+      const entries = Object.entries(data);
+      if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">No devices found under /sensors</td></tr>';
+        return;
+      }
+
+      for (const [id, row] of entries) {
+        // prefer lowercase normalized fields your admin script writes
+        const temp = row.temperature ?? row.Temperature ?? '';
+        const hum  = row.humidity ?? row.Humidify ?? row.Humidity ?? '';
+        const light = row.Light_Intensity ?? row.Light ?? row.Lux ?? '';
+        const ph = row.ph ?? row.Ph ?? '';
+        const updatedAt = row.updatedAt ?? row.updated_at ?? row.updatedAtMillis ?? '';
+        const imgUrl = row.ImageURL ?? row.imageURL ?? row.image ?? '';
+
+        const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${id}</td>
-          <td>${row.Humidity ?? ""}</td>
-          <td></td>
-          <td>${row.Light ?? ""}</td>
-          <td>${row.Temperature ?? ""}</td>
+          <td>${esc(id)}</td>
+          <td>${fmtNum(temp,1)}</td>
+          <td>${fmtNum(hum,1)}</td>
+          <td>${fmtNum(light,1)}</td>
+          <td>${fmtNum(ph,1)}</td>
+          <td>${esc(fmtTime(updatedAt))}</td>
+          <td class="center">${imgUrl ? '<img class="thumb" src="' + esc(imgUrl) + '" alt="img">' : '<span class="muted">no image</span>'}</td>
         `;
         tbody.appendChild(tr);
-      });
+      }
     }
 
-    db.ref(ROOT_PATH).on("value", snap => {
-      render(snap.val());
+    // show initial loading row
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading data…</td></tr>';
+
+    // attach realtime listener with basic error handling
+    db.ref(ROOT_PATH).on('value', snap => {
+      try {
+        render(snap.val());
+      } catch (e) {
+        console.error('render error', e);
+        tbody.innerHTML = '<tr><td colspan="7" class="error">Error rendering data</td></tr>';
+      }
+    }, err => {
+      console.error('DB read error', err);
+      tbody.innerHTML = '<tr><td colspan="7" class="error">Error reading database: ' + esc(err.message || err) + '</td></tr>';
     });
   </script>
 
